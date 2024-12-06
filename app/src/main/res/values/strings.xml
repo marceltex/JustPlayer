@@ -33,6 +33,7 @@
     <string name="pref_map_dv7_on">Play Dolby Vision profile 7 content on HDR displays</string>
     <string name="pref_map_dv7_off">Play UHD Blu-ray content containing Dolby Vision as is</string>
     <string name="shortcut_videos">Videos</string>
+    <string name="button_open_url">Open URL</string>
     <string name="button_open">Open</string>
     <string name="button_crop">Resize</string>
     <string name="button_rotate">Rotate</string>
@@ -58,4 +59,6 @@
     <string name="pref_subtitle_style_bold">Bold style</string>
     <string name="pref_subtitle_style_bold_on">Use bold typeface as regular</string>
     <string name="pref_subtitle_style_bold_off">Use default regular typeface</string>
+    <string name="url_dialog_title">Enter stream’s URL:</string>
+    <string name="url_edit_text_hint">Enter URL</string>
 </resources>

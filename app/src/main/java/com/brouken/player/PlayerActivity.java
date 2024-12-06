@@ -9,6 +9,7 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.AppOpsManager;
+import android.app.Dialog;
 import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
@@ -42,6 +43,7 @@ import android.util.TypedValue;
 import android.view.HapticFeedbackConstants;
 import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
@@ -50,6 +52,8 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.accessibility.CaptioningManager;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
@@ -384,6 +388,13 @@ public class PlayerActivity extends Activity {
             }
         });
 
+        ImageButton buttonOpenUrl = new ImageButton(this, null, 0, R.style.ExoStyledControls_Button_Bottom);
+        buttonOpenUrl.setImageResource(R.drawable.ic_link_24dp);
+        buttonOpenUrl.setId(View.generateViewId());
+        buttonOpenUrl.setContentDescription(getString(R.string.button_open_url));
+
+        buttonOpenUrl.setOnClickListener(view -> showUrlDialog());
+
         buttonOpen = new ImageButton(this, null, 0, R.style.ExoStyledControls_Button_Bottom);
         buttonOpen.setImageResource(R.drawable.ic_folder_open_24dp);
         buttonOpen.setId(View.generateViewId());
@@ -599,6 +610,7 @@ public class PlayerActivity extends Activity {
         final HorizontalScrollView horizontalScrollView = (HorizontalScrollView) getLayoutInflater().inflate(R.layout.controls, null);
         final LinearLayout controls = horizontalScrollView.findViewById(R.id.controls);
 
+        controls.addView(buttonOpenUrl);
         controls.addView(buttonOpen);
         controls.addView(exoSubtitle);
         controls.addView(buttonAspectRatio);
@@ -615,9 +627,7 @@ public class PlayerActivity extends Activity {
 
         exoBasicControls.addView(horizontalScrollView);
 
-        if (Build.VERSION.SDK_INT > 23) {
-            horizontalScrollView.setOnScrollChangeListener((view, i, i1, i2, i3) -> resetHideCallbacks());
-        }
+        horizontalScrollView.setOnScrollChangeListener((view, i, i1, i2, i3) -> resetHideCallbacks());
 
         playerView.setControllerVisibilityListener(new PlayerView.ControllerVisibilityListener() {
             @Override
@@ -1330,14 +1340,10 @@ public class PlayerActivity extends Activity {
         }
 
         player.addListener(playerListener);
+        playerView.showController();
+        playerView.setControllerShowTimeoutMs(PlayerActivity.CONTROLLER_TIMEOUT);
+        player.setPlayWhenReady(true);
         player.prepare();
-
-        if (restorePlayState) {
-            restorePlayState = false;
-            playerView.showController();
-            playerView.setControllerShowTimeoutMs(PlayerActivity.CONTROLLER_TIMEOUT);
-            player.setPlayWhenReady(true);
-        }
     }
 
     private void savePlayer() {
@@ -1613,6 +1619,47 @@ public class PlayerActivity extends Activity {
 
             safelyStartActivityForResult(intent, REQUEST_CHOOSER_VIDEO);
         }
+    }
+
+    private void showUrlDialog() {
+        LayoutInflater inflater = getLayoutInflater();
+        View dialogLayout = inflater.inflate(R.layout.edit_text_layout, null);
+        EditText urlEditText = dialogLayout.findViewById(R.id.urlEditText);
+        urlEditText.requestFocus();
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(PlayerActivity.this);
+        builder.setTitle(R.string.url_dialog_title);
+        builder.setView(dialogLayout);
+        builder.setPositiveButton(android.R.string.ok, (dialog, which) -> openUrl(urlEditText.getText().toString()));
+        builder.setNegativeButton(android.R.string.cancel, (dialog, which) -> dialog.cancel());
+
+        Dialog dialog = builder.create();
+
+        urlEditText.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                openUrl(urlEditText.getText().toString());
+                urlEditText.clearFocus();
+                dialog.cancel();
+                return true;
+            }
+
+            return false;
+        });
+
+        dialog.show();
+    }
+
+    private void openUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return;
+        }
+
+        Uri uri = Uri.parse(url);
+
+        mPrefs.setPersistent(true);
+        mPrefs.updateMedia(this, uri, null);
+
+        initializePlayer();
     }
 
     private void loadSubtitleFile(Uri pickerInitialUri) {
