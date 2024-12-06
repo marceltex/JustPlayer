@@ -68,7 +68,6 @@ import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
-import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
@@ -105,7 +104,6 @@ import com.google.android.material.snackbar.Snackbar;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -1275,29 +1273,9 @@ public class PlayerActivity extends Activity {
             }
             updatebuttonAspectRatioIcon();
 
-            MediaItem.Builder mediaItemBuilder = new MediaItem.Builder()
-                    .setUri(mPrefs.mediaUri)
-                    .setMimeType(mPrefs.mediaType);
-            String title;
-            if (apiTitle != null) {
-                title = apiTitle;
-            } else {
-                title = Utils.getFileName(PlayerActivity.this, mPrefs.mediaUri);
-            }
-            if (title != null) {
-                final MediaMetadata mediaMetadata = new MediaMetadata.Builder()
-                        .setTitle(title)
-                        .setDisplayTitle(title)
-                        .build();
-                mediaItemBuilder.setMediaMetadata(mediaMetadata);
-            }
-            if (apiAccess && apiSubs.size() > 0) {
-                mediaItemBuilder.setSubtitleConfigurations(apiSubs);
-            } else if (mPrefs.subtitleUri != null && Utils.fileExists(this, mPrefs.subtitleUri)) {
-                MediaItem.SubtitleConfiguration subtitle = SubtitleUtils.buildSubtitle(this, mPrefs.subtitleUri, null, true);
-                mediaItemBuilder.setSubtitleConfigurations(Collections.singletonList(subtitle));
-            }
-            player.setMediaItem(mediaItemBuilder.build(), mPrefs.getPosition());
+            MediaItem mediaItem = MediaItem.fromUri(mPrefs.mediaUri);
+
+            player.setMediaItem(mediaItem);
 
             try {
                 if (loudnessEnhancer != null) {
