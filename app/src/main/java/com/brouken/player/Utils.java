@@ -19,6 +19,8 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.media.AudioManager;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
@@ -46,11 +48,19 @@ import androidx.media3.common.Format;
 import androidx.media3.common.MimeTypes;
 
 import com.obsez.android.lib.filechooser.ChooserDialog;
+import com.sigpwned.chardet4j.Chardet;
+import com.sigpwned.chardet4j.io.DecodedInputStreamReader;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -603,7 +613,7 @@ class Utils {
                         } else {
                             // Convert subtitles to UTF-8 if necessary
                             SubtitleUtils.clearCache(activity);
-                            uri = UtilsFeature.convertToUTF(activity, uri);
+                            uri = Utils.convertToUTF(activity, uri);
 
                             activity.mPrefs.updateSubtitle(uri);
                         }
@@ -623,6 +633,61 @@ class Utils {
         chooserDialog.build().show();
 
         return true;
+    }
+
+    public static Uri convertToUTF(PlayerActivity activity, Uri subtitleUri) {
+        try {
+            String scheme = subtitleUri.getScheme();
+            if (scheme != null && scheme.toLowerCase().startsWith("http")) {
+                List<Uri> urls = new ArrayList<>();
+                urls.add(subtitleUri);
+                SubtitleFetcher subtitleFetcher = new SubtitleFetcher(activity, urls);
+                subtitleFetcher.start();
+                return null;
+            } else {
+                InputStream inputStream = activity.getContentResolver().openInputStream(subtitleUri);
+                return convertInputStreamToUTF(activity, subtitleUri, inputStream);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return subtitleUri;
+    }
+
+    public static Uri convertInputStreamToUTF(Context context, Uri subtitleUri, InputStream inputStream) {
+        try {
+            DecodedInputStreamReader decodedInputStreamReader = Chardet.decode(inputStream, StandardCharsets.UTF_8);
+            Charset charset = decodedInputStreamReader.charset();
+            if (!StandardCharsets.UTF_8.equals(charset)) {
+                String filename = subtitleUri.getPath();
+                filename = filename.substring(filename.lastIndexOf("/") + 1);
+                final File file = new File(context.getCacheDir(), filename);
+                final BufferedReader bufferedReader = new BufferedReader(decodedInputStreamReader);
+                final BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file));
+                char[] buffer = new char[512];
+                int num;
+                int pass = 0;
+                boolean success = true;
+                while ((num = bufferedReader.read(buffer)) != -1) {
+                    bufferedWriter.write(buffer, 0, num);
+                    pass++;
+                    if (pass * 512 > 2_000_000) {
+                        success = false;
+                        break;
+                    }
+                }
+                bufferedWriter.close();
+                bufferedReader.close();
+                if (success) {
+                    subtitleUri = Uri.fromFile(file);
+                } else {
+                    subtitleUri = null;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return subtitleUri;
     }
 
     public static boolean isPiPSupported(Context context) {
@@ -721,5 +786,78 @@ class Utils {
             }
         }
         MediaScannerConnection.scanFile(context, storagePaths.toArray(new String[0]), new String[]{"*/*"}, null);
+    }
+
+    public static float getFrameRate(Context context, Uri videoUri) {
+        MediaExtractor mediaExtractor = new MediaExtractor();
+        ArrayList<Long> timestamps = new ArrayList<>();
+        float frameRate = Format.NO_VALUE;
+        int ignoreSamples = 30;
+        try {
+            mediaExtractor.setDataSource(context, videoUri, null);
+            for (int i = 0; i < mediaExtractor.getTrackCount(); i++) {
+                MediaFormat format = mediaExtractor.getTrackFormat(i);
+                String mimeType = format.getString(MediaFormat.KEY_MIME);
+                if (mimeType != null && mimeType.startsWith("video/")) {
+                    mediaExtractor.selectTrack(i);
+                    while (timestamps.size() < 350 + ignoreSamples) {
+                        long timestamp = mediaExtractor.getSampleTime();
+                        if (timestamp < 0) {
+                            break;
+                        }
+                        timestamps.add(timestamp);
+                        mediaExtractor.advance();
+                    }
+                    break;
+                }
+            }
+            Collections.sort(timestamps);
+            long totalFrameDuration = 0;
+            for (int i = 1; i < (timestamps.size() - ignoreSamples); i++) {
+                totalFrameDuration += (timestamps.get(i) - timestamps.get(i - 1));
+            }
+            if (timestamps.size() > 1) {
+                float averageFrameDuration = (float) totalFrameDuration / (timestamps.size() - ignoreSamples - 1);
+                frameRate = 1_000_000f / averageFrameDuration;
+                if (frameRate > 23.95f && frameRate < 23.988f) {
+                    frameRate = 24000f / 1001f;
+                } else if (frameRate > 23.988 && frameRate < 24.1) {
+                    frameRate = 24f;
+                } else if (frameRate > 24.9 && frameRate < 25.1) {
+                    frameRate = 25f;
+                } else if (frameRate > 29.95f && frameRate < 29.985) {
+                    frameRate = 30000f / 1001f;
+                } else if (frameRate > 29.985 && frameRate < 30.1) {
+                    frameRate = 30f;
+                } else if (frameRate > 49.9f && frameRate < 50.1) {
+                    frameRate = 50f;
+                } else if (frameRate > 59.9f && frameRate < 59.97) {
+                    frameRate = 60000f / 1001f;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            mediaExtractor.release();
+        }
+        return frameRate;
+    }
+
+    public static boolean switchFrameRate(final PlayerActivity activity, final Uri uri, final boolean play) {
+        // preferredDisplayModeId only available on SDK 23+
+        // ExoPlayer already uses Surface.setFrameRate() on Android 11+
+        if (Build.VERSION.SDK_INT >= 23) {
+            if (activity.frameRateSwitchThread != null) {
+                activity.frameRateSwitchThread.interrupt();
+            }
+            activity.frameRateSwitchThread = new Thread(() -> {
+                float frameRate = getFrameRate(activity, uri);
+                Utils.handleFrameRate(activity, frameRate, play);
+            });
+            activity.frameRateSwitchThread.start();
+            return true;
+        } else {
+            return false;
+        }
     }
 }
