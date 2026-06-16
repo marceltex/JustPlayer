@@ -4,17 +4,16 @@ plugins {
 
 android {
     namespace 'com.brouken.player'
-    compileSdk 35
-    ndkVersion '21.4.7075529'
+    compileSdk = 36
+    ndkVersion '29.0.14206865'
 
     defaultConfig {
         def abiFilter = project.findProperty("abiFilter")
         applicationId "com.brouken.player"
-        minSdkVersion 21
-        targetSdkVersion 34
-        versionCode 187
+        minSdkVersion 23
+        targetSdkVersion 36
+        versionCode 212
         versionName "0.${versionCode}"
-        archivesBaseName = "Just.Player.v${versionName}"
         if (abiFilter) {
             def abiCodeMap = ["x86": 1, "x86_64": 2, "armeabi-v7a": 3, "arm64-v8a": 4]
             versionCode = versionCode * 10 + abiCodeMap[abiFilter]
@@ -22,6 +21,9 @@ android {
                 abiFilters abiFilter
             }
         }
+    }
+    base {
+        archivesName = "Just.Player.v${defaultConfig.versionName}"
     }
     buildTypes {
         release {
@@ -61,12 +63,12 @@ android {
     applicationVariants.all { variant ->
         if (variant.buildType.name == "release" && variant.flavorName == "latestUniversal") {
             variant.outputs.all { output ->
-                output.outputFileName = "${archivesBaseName}.apk"
+                output.outputFileName = "${base.archivesName.get()}.apk"
             }
         }
         if (variant.buildType.name == "release" && variant.flavorName == "legacyUniversal") {
             variant.outputs.all { output ->
-                output.outputFileName = "${archivesBaseName}-legacy.apk"
+                output.outputFileName = "${base.archivesName.get()}-legacy.apk"
             }
         }
     }
@@ -84,13 +86,14 @@ android {
 }
 
 dependencies {
-    def media3_version = '1.6.0-beta01'
+    def media3_version = '1.10.1'
     def androidxCoreVersion = '1.8.0'
     implementation "androidx.media3:media3-session:$media3_version"
     implementation "androidx.media3:media3-datasource:$media3_version"
     implementation "androidx.media3:media3-decoder:$media3_version"
     implementation "androidx.media3:media3-common:$media3_version"
     implementation "androidx.media3:media3-container:$media3_version"
+    implementation "androidx.media3:media3-extractor:$media3_version"
     implementation("androidx.media3:media3-exoplayer-dash:$media3_version") {
         exclude group: "androidx.media3", module: "media3-exoplayer"
     }
@@ -103,15 +106,15 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-rtsp:$media3_version") {
         exclude group: "androidx.media3", module: "media3-exoplayer"
     }
-    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'com.getkeepsafe.taptargetview:taptargetview:1.13.3'
     implementation 'com.google.android.material:material:1.12.0'
-    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.3.0'
     implementation "androidx.core:core:$androidxCoreVersion"
-    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'androidx.preference:preference:1.2.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    implementation 'com.sigpwned:chardet4j:75.1.2'
+    implementation 'com.squareup.okhttp3:okhttp:5.3.2'
+    implementation 'com.sigpwned:chardet4j:78.1.0'
     implementation project(path: ':doubletapplayerview')
     implementation project(path: ':android-file-chooser')
     implementation fileTree(dir: "libs", include: ["lib-*.aar"])
